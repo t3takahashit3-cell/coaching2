@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>コミュニケーションスタイル診断</title>
+    <style>
+        :root {
+            --bg-color: #fffaf0;
+            --container-bg: #ffffff;
+            --accent-color: #ffb347;
+            --text-color: #4a4a4a;
+            --c-color: #ff6b6b;
+            --p-color: #feca57;
+            --s-color: #1dd1a1;
+            --a-color: #54a0ff;
+        }
+        body {
+            font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+        }
+        .container {
+            max-width: 650px;
+            width: 100%;
+            background: var(--container-bg);
+            padding: 40px;
+            border-radius: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.05);
+        }
+        h1 { text-align: center; color: var(--accent-color); font-size: 1.6rem; margin-bottom: 30px; }
+        .progress-bar { height: 8px; background: #eee; border-radius: 4px; margin-bottom: 20px; overflow: hidden; }
+        .progress-fill { height: 100%; background: var(--accent-color); transition: width 0.3s; width: 0%; }
+        .question-box { min-height: 120px; }
+        .q-num { font-size: 0.9rem; color: #999; margin-bottom: 10px; }
+        .q-text { font-size: 1.2rem; font-weight: bold; line-height: 1.5; margin-bottom: 30px; }
+        .options { display: grid; gap: 12px; }
+        .btn-opt {
+            padding: 18px;
+            border: 2px solid #f0f0f0;
+            border-radius: 15px;
+            background: white;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: all 0.2s;
+            text-align: left;
+        }
+        .btn-opt:hover { background: #fff9f0; border-color: var(--accent-color); transform: translateY(-2px); }
+        
+        /* 結果画面スタイル */
+        .result-card {
+            margin-bottom: 30px;
+            padding: 25px;
+            border-radius: 20px;
+            background: #fff;
+            border: 3px solid #f0f0f0;
+        }
+        .type-c { border-color: var(--c-color); }
+        .type-p { border-color: var(--p-color); }
+        .type-s { border-color: var(--s-color); }
+        .type-a { border-color: var(--a-color); }
+        
+        .result-header { font-size: 1.4rem; font-weight: bold; margin-bottom: 15px; }
+        .section-title { font-weight: bold; border-left: 4px solid var(--accent-color); padding-left: 10px; margin: 20px 0 10px; }
+        .advice-box { background: #fdfdfd; padding: 15px; border-radius: 10px; font-size: 0.95rem; }
+        .hidden { display: none; }
+        .retry-btn { width: 100%; padding: 15px; border: none; border-radius: 15px; background: var(--accent-color); color: white; font-weight: bold; cursor: pointer; margin-top: 20px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div id="quiz-ui">
+        <h1>コミュニケーションタイプ診断</h1>
+        <div class="progress-bar"><div id="progress" class="progress-fill"></div></div>
+        <div class="question-box">
+            <div id="q-num" class="q-num">第 1 問 / 20</div>
+            <div id="q-text" class="q-text">質問を読み込んでいます...</div>
+        </div>
+        <div class="options">
+            <button class="btn-opt" onclick="handleAnswer(1)">1. よく当てはまる</button>
+            <button class="btn-opt" onclick="handleAnswer(2)">2. 当てはまる</button>
+            <button class="btn-opt" onclick="handleAnswer(3)">3. あまり当てはまらない</button>
+            <button class="btn-opt" onclick="handleAnswer(4)">4. 当てはまらない</button>
+        </div>
+    </div>
+
+    <div id="result-ui" class="hidden">
+        <h1>診断結果</h1>
+        <p style="text-align: center;">あなたに強く出ているタイプは以下の通りです：</p>
+        <div id="results-list"></div>
+        <button class="retry-btn" onclick="location.reload()">もう一度診断する</button>
+    </div>
+</div>
+
+<script>
+    // ファイル1の太枠に基づいたマッピング
+    const questions = [
+        { q: "自己主張することが下手だと思う", type: "S" },
+        { q: "常に未来に対して情熱を持っているほうだ", type: "P" },
+        { q: "他人のためにしたことを感謝されないと悔しく思うことがよくある", type: "S" },
+        { q: "嫌なことは嫌と、はっきり言える", type: "C" },
+        { q: "人にはなかなか気を許さない", type: "A" },
+        { q: "人から楽しい人とよく言われる", type: "P" },
+        { q: "短い時間にできるだけ多くのことをしようとする", type: "C" },
+        { q: "失敗しても立ち直りが早い", type: "P" },
+        { q: "人からものを頼まれるとなかなかノーと言えない", type: "S" },
+        { q: "たくさんの情報を検討してから決断をくだす", type: "A" },
+        { q: "人の話しを聞くことよりも自分が話していることのほうが多い", type: "C" },
+        { q: "どちらかというと人見知りするほうだ", type: "S" },
+        { q: "自分と他人をよく比較する", type: "C" },
+        { q: "変化に強く適応力がある", type: "P" },
+        { q: "何事も自分の感情を表現することが苦手だ", type: "A" },
+        { q: "相手の好き嫌いにかかわらず、人の世話をしてしまうほうだ", type: "S" },
+        { q: "自分が思ったことはストレートに言う", type: "P" },
+        { q: "仕事の出来栄えについて人から認められたい", type: "A" },
+        { q: "競争心が強い", type: "C" },
+        { q: "何事でも完全にしないと気がすまない", type: "A" }
+    ];
+
+    const typeDetails = {
+        C: {
+            title: "1. コントローラータイプ（C：Controller）",
+            color: "type-c",
+            traits: "自己主張：強い / 感情表現：控えめ<br>重視：結果・スピード・効率・決断",
+            tendency: "物事を主導したがる。結論ファーストで話し、自分で決めたい欲求が強い。",
+            advice: "<li>結論から要点だけ伝える</li><li>選択肢を用意し、相手に選んでもらう</li><li>感情より事実・数字（成果）で話す</li>"
+        },
+        P: {
+            title: "2. プロモータータイプ（P：Promoter）",
+            color: "type-p",
+            traits: "自己主張：強い / 感情表現：強い<br>重視：楽しさ・新しさ・アイデア",
+            tendency: "話し好きで社交的。新しいことが好きでアイデアが出るが、飽きっぽい一面も。",
+            advice: "<li>リアクションをしっかり返し、承認・賞賛する</li><li>自由に話させるオープンな質問をする</li><li>ワクワクする将来のイメージを共有する</li>"
+        },
+        S: {
+            title: "3. サポータータイプ（S：Supporter）",
+            color: "type-s",
+            traits: "自己主張：控えめ / 感情表現：強い<br>重視：人間関係・安心感・調和",
+            tendency: "人を支えることに喜びを感じる。対立を嫌い、場の空気や周囲の気持ちを優先する。",
+            advice: "<li>穏やかなトーンで、安心できる雰囲気を作る</li><li>感情に焦点を当てた質問をし、貢献を認める</li><li>意見を引き出すときは時間をかけ、段階的に進める</li>"
+        },
+        A: {
+            title: "4. アナライザータイプ（A：Analyzer）",
+            color: "type-a",
+            traits: "自己主張：控えめ / 感情表現：控えめ<br>重視：正確さ・論理・根拠・リスク管理",
+            tendency: "データや手順を重視。慎重で十分に検討してから動き、感情論を好まない。",
+            advice: "<li>客観的な根拠やデータをセットで伝える</li><li>検討のための十分な時間を与える</li><li>具体的な数値・期限・条件を明確にする</li>"
+        }
+    };
+
+    let currentIndex = 0;
+    let scores = { C: 0, P: 0, S: 0, A: 0 };
+
+    function updateUI() {
+        const progress = (currentIndex / questions.length) * 100;
+        document.getElementById('progress').style.width = `${progress}%`;
+        document.getElementById('q-num').innerText = `第 ${currentIndex + 1} 問 / 20`;
+        document.getElementById('q-text').innerText = questions[currentIndex].q;
+    }
+
+    function handleAnswer(value) {
+        const type = questions[currentIndex].type;
+        scores[type] += value;
+        
+        currentIndex++;
+        if (currentIndex < questions.length) {
+            updateUI();
+        } else {
+            showResult();
+        }
+    }
+
+    function showResult() {
+        document.getElementById('quiz-ui').classList.add('hidden');
+        document.getElementById('result-ui').classList.remove('hidden');
+
+        // スコアが低いほど「よく当てはまる」タイプ（1〜4点の選択制のため）
+        const minScore = Math.min(...Object.values(scores));
+        const winners = Object.keys(scores).filter(key => scores[key] === minScore);
+
+        const container = document.getElementById('results-list');
+        winners.forEach(type => {
+            const data = typeDetails[type];
+            const card = document.createElement('div');
+            card.className = `result-card ${data.color}`;
+            card.innerHTML = `
+                <div class="result-header">${data.title}</div>
+                <div class="section-title">特徴</div>
+                <p>${data.traits}</p>
+                <div class="section-title">行動傾向</div>
+                <p>${data.tendency}</p>
+                <div class="section-title">コミュニケーションのコツ</div>
+                <div class="advice-box"><ul>${data.advice}</ul></div>
+            `;
+            container.appendChild(card);
+        });
+    }
+
+    updateUI();
+</script>
+
+</body>
+</html>
